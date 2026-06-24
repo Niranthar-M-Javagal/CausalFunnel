@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  database:
+    image: mongo:6.0
+    container_name: causalfunnel-db
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - analytics-network
+
+  backend:
+    build: ./backend
+    container_name: causalfunnel-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      MONGODB_URI: mongodb://database:27017/causalfunnel_analytics
+    depends_on:
+      - database
+    networks:
+      - analytics-network
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:5000
+    container_name: causalfunnel-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - analytics-network
+
+volumes:
+  mongo-data:
+
+networks:
+  analytics-network:
+    driver: bridge
