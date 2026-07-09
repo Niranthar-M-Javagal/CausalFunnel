@@ -61,9 +61,10 @@ This project implements the core requirements from the assignment.
 
 ### Backend
 
-* Node.js
-* Express.js
-* Mongoose
+* Python
+* Flask
+* MongoEngine (ODM)
+* Gunicorn (WSGI server)
 
 ### Database
 
@@ -86,18 +87,18 @@ This project implements the core requirements from the assignment.
 ```text
 CausalFunnel/
 ├── backend/
-│   ├── src/
-│   │   ├── config/
-│   │   │   └── db.js
+│   ├── app/
 │   │   ├── controllers/
-│   │   │   └── analyticsController.js
+│   │   │   └── analytics_controller.py
 │   │   ├── models/
-│   │   │   └── Event.js
+│   │   │   └── event.py
 │   │   ├── routes/
-│   │   │   └── analyticsRoutes.js
-│   │   └── app.js
-│   ├── server.js
-│   ├── package.json
+│   │   │   └── analytics_routes.py
+│   │   ├── __init__.py
+│   │   └── config.py
+│   ├── run.py
+│   ├── requirements.txt
+│   ├── .env.example
 │   └── Dockerfile
 │
 ├── frontend/
@@ -148,7 +149,7 @@ This is intentionally simple for the assignment and avoids adding cookie/session
 
 ## 2) Backend API Layer
 
-The Express backend exposes a small analytics API for event ingestion and analytics retrieval.
+The Flask backend exposes a small analytics API for event ingestion and analytics retrieval. Routes are registered through a Blueprint and delegate to controller functions, mirroring a typical Express router/controller split.
 
 ### API Endpoints
 
@@ -201,7 +202,7 @@ Returns click events for a page so the frontend can render a heatmap-like visual
 
 ## 3) Database Model
 
-Events are stored in MongoDB using a structured `Event` schema.
+Events are stored in MongoDB using a structured `Event` document defined with MongoEngine.
 
 ### Event document shape
 
@@ -231,7 +232,7 @@ Each event can include:
 * `viewportWidth`
 * `viewportHeight`
 
-For `page_view` events, click coordinate fields are not required.
+For `page_view` events, click coordinate fields are not required. This is enforced in the `Event` document's `clean()` validation hook, and again at the API layer before the document is saved.
 
 ### Indexed fields
 
@@ -304,7 +305,7 @@ When a user opens the demo page:
 
 ## 2) Session Aggregation
 
-The sessions list is powered by a MongoDB aggregation pipeline that groups events by `sessionId` and computes:
+The sessions list is powered by a MongoDB aggregation pipeline (run via PyMongo's `aggregate()` on the underlying collection) that groups events by `sessionId` and computes:
 
 * total number of events
 * number of page views
@@ -335,7 +336,9 @@ This makes the heatmap more consistent than storing only raw click coordinates a
 
 Make sure you have the following installed if running locally without Docker:
 
-* Node.js 18+ (or newer)
+* Python 3.12+ (or newer)
+* pip
+* Node.js 18+ (or newer), for the frontend
 * npm
 * MongoDB local instance **or** a MongoDB Atlas connection string
 
@@ -358,7 +361,7 @@ Go into the backend folder:
 
 ```bash
 cd backend
-npm install
+pip install -r requirements.txt
 ```
 
 Create a `.env` file inside `backend/` with:
@@ -378,8 +381,10 @@ MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/causalfunnel_analy
 Start the backend:
 
 ```bash
-npm run dev
+python run.py
 ```
+
+> Run this from the `backend/` folder (not `backend/app/`) — `run.py` imports the `app` package relative to `backend/`.
 
 The backend will run on:
 
@@ -433,7 +438,7 @@ docker compose up --build
 This starts:
 
 * MongoDB
-* Express backend
+* Flask backend (served via Gunicorn)
 * frontend app
 
 ### Default local ports
@@ -503,6 +508,7 @@ Returns click coordinates for a page heatmap.
 * The app uses a simulated storefront page to generate user interaction data for the assignment.
 * The heatmap is a lightweight visual overlay rather than a production-grade density map.
 * Viewport dimensions are stored with click events so click positions can be interpreted more consistently across different screen sizes.
+* The backend uses MongoEngine's default lazy connection, with an explicit `ping` check on startup so a bad `MONGODB_URI` fails fast instead of surfacing on the first request.
 * The backend is deployed on Render free tier, which may cause a short cold-start delay after inactivity.
 
 ---
